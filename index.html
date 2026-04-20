@@ -1,3 +1,224 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>♜ Шахматы — P2P (розовые vs зелёные)</title>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            font-family: 'Segoe UI', 'Arial', system-ui, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(145deg, #2b3a2b 0%, #1f2a1f 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 12px;
+        }
+
+        .game-container {
+            background: #4a3622;
+            background-image: radial-gradient(circle at 30% 20%, #6b4f32, #2e2419);
+            padding: 1.5rem 1.2rem 1.8rem;
+            border-radius: 40px;
+            box-shadow: 0 30px 35px rgba(0,0,0,0.6), inset 0 2px 5px rgba(255,215,140,0.3);
+            border: 1px solid #b99e6b;
+            max-width: 700px;
+            width: fit-content;
+            margin: 0 auto;
+        }
+
+        /* Панель соединения — адаптивная */
+        .connection-panel {
+            background: #2f241acc;
+            backdrop-filter: blur(6px);
+            padding: 12px 15px;
+            border-radius: 50px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            border-bottom: 2px solid #bc9b5a;
+            color: #f3e7c4;
+        }
+
+        .conn-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            min-width: 140px;
+        }
+
+        .room-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            flex: 2 1 auto;
+            justify-content: flex-end;
+        }
+
+        .room-controls input {
+            background: #1e2a1e;
+            border: 2px solid #8b6f42;
+            padding: 8px 12px;
+            border-radius: 40px;
+            color: #f5e5c9;
+            font-weight: bold;
+            font-size: 0.9rem;
+            width: 160px;
+            max-width: 180px;
+            text-transform: uppercase;
+            outline: none;
+            flex-shrink: 1;
+        }
+
+        .room-controls input::placeholder {
+            color: #a59b7c;
+            opacity: 0.8;
+            font-size: 0.8rem;
+        }
+
+        button {
+            background: #6f5230;
+            border: none;
+            border-bottom: 4px solid #3b2c1b;
+            color: #f3e9d2;
+            font-weight: bold;
+            font-size: 0.9rem;
+            padding: 8px 16px;
+            border-radius: 40px;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #2d1f10, 0 3px 6px black;
+            transition: all 0.07s;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            border: 1px solid #b4945a;
+            white-space: nowrap;
+        }
+
+        button:hover {
+            background: #8b6a42;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 0 #2d1f10, 0 6px 10px black;
+        }
+
+        button:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 #2d1f10, 0 3px 6px black;
+        }
+
+        .status-badge {
+            background: #1e2a1e;
+            padding: 6px 16px;
+            border-radius: 40px;
+            font-size: 1rem;
+            font-weight: bold;
+            color: #eedbba;
+            box-shadow: inset 0 0 6px #7f9f6f;
+            text-align: center;
+            min-width: 150px;
+        }
+
+        .board-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            width: min(68vw, 68vh, 520px);
+            height: min(68vw, 68vh, 520px);
+            border-radius: 16px;
+            box-shadow: 0 0 0 2px #2e1e0e, 0 18px 28px rgba(0,0,0,0.7);
+            background: #e8d5b5;
+            cursor: pointer;
+        }
+
+        .turn-indicator {
+            margin-top: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            background: #3c2e1fcc;
+            backdrop-filter: blur(6px);
+            padding: 8px 20px;
+            border-radius: 60px;
+            box-shadow: inset 0 3px 8px #1f160e, 0 6px 10px #0f0b07;
+            border-bottom: 2px solid #bc9b5a;
+            color: #f3e7c4;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .player-color {
+            background: #2a3a2a;
+            padding: 5px 18px;
+            border-radius: 30px;
+        }
+
+        .footer-note {
+            margin-top: 10px;
+            color: #cfc19b;
+            text-align: center;
+            font-size: 0.8rem;
+        }
+
+        /* Адаптация для очень узких экранов */
+        @media (max-width: 550px) {
+            .game-container { padding: 1rem 0.8rem; }
+            .connection-panel { flex-direction: column; align-items: stretch; }
+            .room-controls { justify-content: center; }
+            .room-controls input { width: 130px; }
+            button { padding: 6px 12px; font-size: 0.8rem; }
+            .status-badge { min-width: 120px; }
+        }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <div class="connection-panel">
+        <div class="conn-status">
+            <span style="font-size: 1.3rem;">🔄</span>
+            <span id="connectionState">⚪ Не подключено</span>
+        </div>
+        <div class="room-controls">
+            <input type="text" id="roomIdInput" placeholder="ID комнаты" maxlength="20" autocomplete="off">
+            <button id="hostBtn">🎮 Создать</button>
+            <button id="joinBtn">🔗 Войти</button>
+            <button id="disconnectBtn" style="background:#5a3e2b;">✖ Откл.</button>
+            <button id="resetGameBtn" style="background:#4f6d4f;">🔄 Новая</button>
+        </div>
+        <div class="status-badge" id="playerInfo">👤 Ожидание...</div>
+    </div>
+
+    <div class="board-wrapper">
+        <canvas id="chessCanvas" width="520" height="520"></canvas>
+        
+        <div class="turn-indicator">
+            <span id="turnMessage">♔ Ход белых</span>
+            <span class="player-color" id="myColorDisplay">⚪ Наблюдатель</span>
+        </div>
+        <div class="footer-note">
+            • Белые — розовые, чёрные — зелёные • Авто-ферзь • Доска повёрнута к вам •
+        </div>
+    </div>
+</div>
+
 <script>
     (function(){
         "use strict";
@@ -208,3 +429,5 @@
         drawBoard();
     })();
 </script>
+</body>
+</html>
